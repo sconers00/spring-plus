@@ -1,10 +1,13 @@
 package org.example.expert.domain.todo.service;
 
+import java.time.LocalDate;
+
 import lombok.RequiredArgsConstructor;
 import org.example.expert.client.WeatherClient;
 import org.example.expert.domain.common.dto.AuthUser;
 import org.example.expert.domain.common.exception.InvalidRequestException;
 import org.example.expert.domain.todo.dto.request.TodoSaveRequest;
+import org.example.expert.domain.todo.dto.request.TodoSearchRequest;
 import org.example.expert.domain.todo.dto.response.TodoResponse;
 import org.example.expert.domain.todo.dto.response.TodoSaveResponse;
 import org.example.expert.domain.todo.entity.Todo;
@@ -14,6 +17,8 @@ import org.example.expert.domain.user.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,11 +52,28 @@ public class TodoService {
         );
     }
 
-    public Page<TodoResponse> getTodos(int page, int size) {
-        Pageable pageable = PageRequest.of(page - 1, size);
+    public Page<TodoResponse> getTodos(TodoSearchRequest searchRequest) {
+        Pageable pageable = PageRequest.of((searchRequest.getPage() - 1), searchRequest.getSize());
+        Page<Todo> todos=null;
+        String weather = searchRequest.getWeather();
+        LocalDate std = searchRequest.getStDate();
+        LocalDate edd = searchRequest.getEdDate();
+        if(searchRequest.getWeather().isEmpty()&&searchRequest.getStDate()==null&&searchRequest.getEdDate()==null){
+            todos = todoRepository.findAllByOrderByModifiedAtDesc(pageable);
+        }
+        if(searchRequest.getWeather().isEmpty()){
+        todos = todoRepository.findAllByOrderByModifiedAtDescWithDate(pageable, std, edd);
+        }
+        if(searchRequest.getStDate()==null&&searchRequest.getEdDate()==null){
+        todos = todoRepository.findAllByOrderByModifiedAtDescWithWeather(pageable, weather);
+        }
+        if(!searchRequest.getWeather().isEmpty()&&searchRequest.getStDate()==null&&searchRequest.getEdDate()==null){
+        todos = todoRepository.findAllByOrderByModifiedAtDescWithDateAndWeather(pageable, weather, std, edd);
+        }
 
-        Page<Todo> todos = todoRepository.findAllByOrderByModifiedAtDesc(pageable);
-
+        if(todos==null){
+            return new ResponseEntity<Page<TodoResponse>>(HttpStatus.NOT_FOUND).getBody();
+        }
         return todos.map(todo -> new TodoResponse(
                 todo.getId(),
                 todo.getTitle(),
